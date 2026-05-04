@@ -236,26 +236,37 @@ function renderGastos(){
   var opts=S.cats_gasto.map(function(c){return '<option value="'+c.id+'">'+c.nombre+'</option>';}).join("");
   var lista=S.gastos.length?S.gastos.map(function(g){
     var c=CG[g.cat]||{nombre:g.cat,color:"#C9A84C"};
-    return '<div class="row su"><div style="flex:1;min-width:0"><div style="display:flex;gap:5px;margin-bottom:2px"><span class="badge" style="background:'+c.color+'22;color:'+c.color+'">'+c.nombre+'</span><span style="font-size:.56rem;color:rgba(237,224,196,.2)">'+g.fecha+'</span></div><div style="font-size:.79rem;color:rgba(237,224,196,.7);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+g.desc+'</div></div><div style="display:flex;align-items:center;gap:8px;margin-left:7px"><span style="font-size:.87rem;font-weight:700;color:#C9A84C;white-space:nowrap">'+fmt(g.monto)+'</span><button class="del" onclick="delG('+g.id+')">&#x2715;</button></div></div>';
+    return '<div class="row su"><div style="flex:1;min-width:0"><div style="display:flex;gap:5px;margin-bottom:2px;flex-wrap:wrap"><span class="badge" style="background:'+c.color+'22;color:'+c.color+'">'+c.nombre+'</span>'+(g.cuentaId?'<span class="badge" style="background:rgba(96,160,255,.1);color:rgba(96,160,255,.7)">'+((S.cuentas.find(function(x){return String(x.id)===String(g.cuentaId);})||{nombre:""}).nombre)+'</span>':'')+'<span style="font-size:.56rem;color:rgba(237,224,196,.2)">'+g.fecha+'</span></div><div style="font-size:.79rem;color:rgba(237,224,196,.7);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+g.desc+'</div></div><div style="display:flex;align-items:center;gap:8px;margin-left:7px"><span style="font-size:.87rem;font-weight:700;color:#C9A84C;white-space:nowrap">'+fmt(g.monto)+'</span><button class="del" onclick="delG('+g.id+')">&#x2715;</button></div></div>';
   }).join(""):'<div style="text-align:center;padding:28px;color:rgba(237,224,196,.2);font-size:.78rem">Sin gastos registrados</div>';
   return '<div class="card" style="margin-top:0"><span class="sl">REGISTRAR GASTO</span>'+
     '<div class="g2"><select class="inp" id="g-cat">'+opts+'</select><input class="inp" type="number" id="g-monto" placeholder="Monto" inputmode="numeric"/></div>'+
     '<div class="g2"><div style="position:relative"><input class="inp" id="g-desc" placeholder="Descripcion" onkeydown="if(event.key===\'Enter\')addG()" style="padding-right:62px"/><button class="classify-btn" onclick="autoClasificar()" id="classify-btn" style="position:absolute;right:6px;top:50%;transform:translateY(-50%)">IA &#10022;</button></div>'+
     '<input class="inp" type="date" id="g-fecha" value="'+TODAY+'"/></div>'+
     '<div id="classify-hint" class="classify-hint"></div>'+
+    (S.cuentas.length>0?'<div style="margin-bottom:8px"><span class="sl" style="margin-bottom:5px;color:rgba(248,113,113,.5)">DESCONTAR DE CUENTA (opcional)</span><select class="inp" id="g-cuenta"><option value="">No descontar</option>'+S.cuentas.map(function(c){return '<option value="'+c.id+'">'+c.nombre+' ('+fmt(c.saldo)+')</option>';}).join('')+'</select></div>':'')+
     '<div style="margin-top:6px"><button class="btn-g" onclick="addG()">+ Agregar Gasto</button></div></div>'+lista;
 }
 function addG(){
   var m=document.getElementById("g-monto").value,d=document.getElementById("g-desc").value;
   if(!m||!d)return;
   var cat=document.getElementById("g-cat").value;
-  var nuevo={id:Date.now(),cat:cat,monto:+m,desc:d,fecha:document.getElementById("g-fecha").value};
-  S.gastos.unshift(nuevo);persist();
+  var cuentaEl=document.getElementById("g-cuenta");
+  var cuentaId=cuentaEl?cuentaEl.value:"";
+  var nuevo={id:Date.now(),cat:cat,monto:+m,desc:d,fecha:document.getElementById("g-fecha").value,cuentaId:cuentaId||null};
+  S.gastos.unshift(nuevo);
+  // Descontar de cuenta si se seleccionó
+  var cuNombre="";
+  if(cuentaId){
+    var cu=S.cuentas.find(function(c){return String(c.id)===String(cuentaId);});
+    if(cu){cu.saldo-=+m;cuNombre=cu.nombre;}
+  }
+  persist();
   var catN=(cmG()[cat]||{nombre:cat}).nombre;
-  syncMake({accion:"guardar_gasto",sheet_id:"1Qo_YsB30qAT_ilK9qv48dKQgrm78u5rJtJ5sJswwHb8",id:nuevo.id,fecha:nuevo.fecha,categoria:catN,cat_id:cat,descripcion:d,monto:+m});
+  syncMake({accion:"guardar_gasto",sheet_id:"1Qo_YsB30qAT_ilK9qv48dKQgrm78u5rJtJ5sJswwHb8",id:nuevo.id,fecha:nuevo.fecha,categoria:catN,cat_id:cat,descripcion:d,monto:+m,cuenta:cuNombre});
   var p=(sumG()/S.pres)*100,umb=+(S.cfg.alerta)||80,mk=TODAY.slice(0,7);
   if(S.cfg.url&&p>=umb&&load("as7","")!==mk){save("as7",mk);syncMake({accion:"alerta_whatsapp",wa:S.cfg.wa,porcentaje:p.toFixed(1),total:sumG(),presupuesto:S.pres});}
-  renderBanner();renderContent();showToast("Gasto guardado");
+  renderBanner();renderContent();
+  showToast("Gasto guardado"+(cuNombre?" - Descontado de "+cuNombre:""));
 }
 function delG(id){S.gastos=S.gastos.filter(function(g){return g.id!==id;});persist();renderBanner();renderContent();}
 
