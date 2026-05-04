@@ -295,10 +295,15 @@ function renderIngresos(){
 function addI(){
   var m=document.getElementById("i-monto").value,d=document.getElementById("i-desc").value;if(!m||!d)return;
   var cuentaId=document.getElementById("i-cuenta").value;
-  var nuevo={id:Date.now(),cat:document.getElementById("i-cat").value,monto:+m,desc:d,fecha:document.getElementById("i-fecha").value,cuentaId:cuentaId||null};
+  var catId=document.getElementById("i-cat").value;
+  var catN=(cmI()[catId]||{nombre:catId}).nombre;
+  var cuNombre="";
+  var nuevo={id:Date.now(),cat:catId,monto:+m,desc:d,fecha:document.getElementById("i-fecha").value,cuentaId:cuentaId||null};
   S.ingresos.unshift(nuevo);
-  if(cuentaId){var cu=S.cuentas.find(function(c){return String(c.id)===String(cuentaId);});if(cu)cu.saldo+=+m;}
-  persist();renderBanner();renderContent();showToast("Ingreso registrado");
+  if(cuentaId){var cu=S.cuentas.find(function(c){return String(c.id)===String(cuentaId);});if(cu){cu.saldo+=+m;cuNombre=cu.nombre;}}
+  persist();
+  syncMake({accion:"guardar_ingreso",sheet_id:"1Qo_YsB30qAT_ilK9qv48dKQgrm78u5rJtJ5sJswwHb8",id:nuevo.id,fecha:nuevo.fecha,categoria:catN,cat_id:catId,descripcion:d,monto:+m,cuenta:cuNombre});
+  renderBanner();renderContent();showToast("Ingreso guardado en Sheets");
 }
 function delI(id){
   var ing=S.ingresos.find(function(i){return i.id===id;});
@@ -329,7 +334,14 @@ function renderCuentas(){
     (S.cuentas.length>0?'<div class="card" style="display:flex;justify-content:space-between;align-items:center;background:rgba(96,160,255,.03);border-color:rgba(96,160,255,.1)"><span style="font-size:.7rem;color:rgba(237,224,196,.3)">Total en cuentas</span><span style="font-size:1rem;font-weight:700;color:#60A0FF">'+fmt(totalC())+'</span></div>':'')+lista;
 }
 function pickColor(col,el){selColor=col;document.querySelectorAll("#cp1 div").forEach(function(d){d.style.border="2px solid transparent";});el.style.border="2px solid #fff";}
-function addCuenta(){var n=document.getElementById("cu-nom").value,s=document.getElementById("cu-saldo").value;if(!n)return;S.cuentas.push({id:Date.now(),nombre:n,saldo:+s||0,color:selColor});persist();renderBanner();renderContent();showToast("Cuenta agregada");}
+function addCuenta(){
+  var n=document.getElementById("cu-nom").value,s=document.getElementById("cu-saldo").value;
+  if(!n)return;
+  var nc={id:Date.now(),nombre:n,saldo:+s||0,color:selColor};
+  S.cuentas.push(nc);persist();
+  syncMake({accion:"guardar_cuenta",sheet_id:"1Qo_YsB30qAT_ilK9qv48dKQgrm78u5rJtJ5sJswwHb8",id:nc.id,nombre:n,saldo:+s||0,color:selColor});
+  renderBanner();renderContent();showToast("Cuenta guardada en Sheets");
+}
 function delCuenta(id){S.cuentas=S.cuentas.filter(function(c){return c.id!==id;});persist();renderBanner();renderContent();}
 function ajustarSaldo(id){var cu=S.cuentas.find(function(c){return c.id===id;});if(!cu)return;var n=prompt("Nuevo saldo para "+cu.nombre+":",cu.saldo);if(n!==null&&!isNaN(+n)){cu.saldo=+n;persist();renderBanner();renderContent();}}
 
@@ -626,8 +638,38 @@ async function testWH(){
 
 function showToast(msg){var t=document.createElement("div");t.textContent=msg;t.style.cssText="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#C9A84C;color:#060502;padding:8px 18px;border-radius:99px;font-size:.74rem;font-weight:700;z-index:999;white-space:nowrap";document.body.appendChild(t);setTimeout(function(){t.remove();},2500);}
 
+// ── CARGAR DESDE SHEETS ──────────────────────────────────────────────────────
+async function cargarDesdeSheets(){
+  if(!S.cfg.url)return;
+  try{
+    const r=await callMake({accion:"cargar_datos"});
+    var actualizado=false;
+    if(r.gastos&&r.gastos.length>0){
+      S.gastos=r.gastos.map(function(g){
+        return{id:+g.ID||Date.now(),cat:g.cat_id||"otros",monto:+g.Monto||0,desc:g.Descripcion||"",fecha:g.Fecha||TODAY};
+      });
+      actualizado=true;
+    }
+    if(r.ingresos&&r.ingresos.length>0){
+      S.ingresos=r.ingresos.map(function(i){
+        return{id:+i.ID||Date.now(),cat:i.cat_id||"salario",monto:+i.Monto||0,desc:i.Descripcion||"",fecha:i.Fecha||TODAY,cuentaId:i.Cuenta||null};
+      });
+      actualizado=true;
+    }
+    if(r.cuentas&&r.cuentas.length>0){
+      S.cuentas=r.cuentas.map(function(c){
+        return{id:+c.ID||Date.now(),nombre:c.Nombre||"",saldo:+c.Saldo||0,color:c.Color||"#C9A84C"};
+      });
+      actualizado=true;
+    }
+    if(actualizado){persist();renderBanner();renderContent();showToast("Datos cargados desde Sheets");}
+  }catch(e){console.log("Sin datos en Sheets aun");}
+}
+
 // ── INIT ──────────────────────────────────────────────────────────────────────
 renderBanner();renderTabs();renderContent();setDot("dot-main","idle");
+// Cargar datos de Sheets al iniciar
+setTimeout(function(){cargarDesdeSheets();},1000);
 </script>
 <script>
 if("serviceWorker"in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("/sw.js").catch(function(){});});
