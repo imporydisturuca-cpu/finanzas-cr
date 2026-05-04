@@ -1,8 +1,11 @@
-const CACHE = 'finanzas-cr-v2';
-const ASSETS = ['/', '/index.html', '/manifest.json'];
+const CACHE = 'finanzas-cr-v3';
+const ASSETS = [
+  'https://imporydisturuca-cpu.github.io/finanzas-cr/',
+  'https://imporydisturuca-cpu.github.io/finanzas-cr/index.html',
+];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS).catch(()=>{})));
   self.skipWaiting();
 });
 
@@ -14,7 +17,10 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // No interceptar Make ni APIs externas
-  if (e.request.url.includes('make.com') || e.request.url.includes('googleapis') || e.request.url.includes('google.com')) return;
-  e.respondWith(caches.match(e.request).then(cached => cached || fetch(e.request)));
+  if (e.request.url.includes('make.com') || 
+      e.request.url.includes('googleapis') || 
+      e.request.url.includes('google.com')) return;
+  e.respondWith(
+    fetch(e.request).catch(() => caches.match(e.request))
+  );
 });
